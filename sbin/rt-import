@@ -1,0 +1,16 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+### after: use lib qw(@RT_LIB_PATH@);
+use lib qw(/opt/rt3/local/lib /opt/rt3/lib);
+
+use RT;
+RT::LoadConfig();
+push @{ scalar RT->Config->Get('Plugins') }, 'RT::Extension::ExportImport';
+RT::Init();
+
+require RT::App::Import;
+exit RT::App::Import->run( @ARGV );
+
