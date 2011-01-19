@@ -39,12 +39,12 @@ sub export {
 
     my $seen = $self->{'seen'}{ $args{'class'} } ||= {};
 
-    my ($fh, $csv) = $self->csv( %args );
+    my ($fh, $csv) = $self->csv_writer( %args );
 
     my $query = 'SELECT '. join(', ', map "$args{'alias'}.$_", @fields)
         .' FROM '. $args{'query'};
-    print "$query\n";
-    print "\tbindings: ". join(', ', map "'$_'", @{ $args{'binds'} }) . "\n"
+    $self->debug($query);
+    $self->debug("\tbindings: ". join(', ', map "'$_'", @{ $args{'binds'} }) . "\n")
         if @{ $args{'binds'} };
 
     my $sth = $RT::Handle->SimpleQuery( $query, @{ $args{'binds'} } );
@@ -60,11 +60,11 @@ sub export {
 
         $csv->print($fh, $row);
     }
-    print "Exported $counter rows\n";
+    $self->debug("Exported $counter rows\n");
     return $counter;
 }
 
-sub csv {
+sub csv_writer {
     my $self = shift;
     my %args = (
         class => undef,
@@ -76,16 +76,24 @@ sub csv {
     my $path = File::Spec->catfile( $self->output, $name . '.csv' );
     my $exists = -e $path;
 
-    open my $fh, '>>:raw', $path
+    open my $fh, '>>', $path
         or die "Couldn't open '$path': $!";
 
-    my $csv = Text::CSV->new ( { binary => 1 } );
-
+    my $csv = $self->csv;
     unless ( $exists ) {
-        print $fh '# RT '. $RT::VERSION .' '. $args{'class'} ."\n";
+        $csv->print( $fh, [ 'rt-export', $RT::VERSION, $args{'class'} ] );
+        use Data::Dumper;
+        print Dumper( [$self->fields( class => $args{'class'} ) ]);
         $csv->print( $fh, [ $self->fields( class => $args{'class'} ) ] );
     }
     return ($fh, $csv);
+}
+
+sub csv {
+    my $self = shift;
+    require Text::CSV_PP;
+    my $csv = Text::CSV_PP->new ( { binary => 1, eol => "\r\n" } );
+    return $csv;
 }
 
 sub fields {
@@ -99,6 +107,13 @@ sub table {
     my $self = shift;
     my %args = (@_);
     return $args{'class'}->new( $RT::SystemUser )->Table;
+}
+
+sub debug {
+    my $self = shift;
+    return unless $self->{'debug'};
+
+    print STDOUT @_, "\n";
 }
 
 =head1 AUTHOR
